@@ -104,11 +104,13 @@ MSTResult primAlgorithm(int n, const Edge* edges, int m) {
     result.edgeCount = 0;
     result.totalWeight = 0;
 
-    // Матрица смежности (static — чтобы не на стеке)
+    // Матрица смежности (static — чтобы не на стеке).
+    // Маркер отсутствия ребра — INF (не может быть настоящим весом,
+    // поэтому отрицательные веса обрабатываются корректно).
     static int weight[MAX_VERTICES][MAX_VERTICES];
     for (int i = 0; i < n; ++i) {
         for (int j = 0; j < n; ++j) {
-            weight[i][j] = -1;
+            weight[i][j] = INF;
         }
     }
     for (int i = 0; i < m; ++i) {
@@ -116,7 +118,7 @@ MSTResult primAlgorithm(int n, const Edge* edges, int m) {
         int v = edges[i].v;
         int w = edges[i].weight;
         if (u == v) continue; // игнорируем петли
-        if (weight[u][v] == -1 || w < weight[u][v]) {
+        if (w < weight[u][v]) {
             weight[u][v] = w;
             weight[v][u] = w;
         }
@@ -164,7 +166,7 @@ MSTResult primAlgorithm(int n, const Edge* edges, int m) {
         }
 
         for (int v = 0; v < n; ++v) {
-            if (!inMST[v] && weight[u][v] != -1) {
+            if (!inMST[v] && weight[u][v] != INF) {
                 if (weight[u][v] < minWeight[v]) {
                     minWeight[v] = weight[u][v];
                     parent[v] = u;
