@@ -105,12 +105,9 @@ bool readGraph(const char* filename, int& n, int& m,
 }
 
 // ---------------------------------------------------------------
-// Построение списков смежности.
-// adjStart[v] — начало списка соседей вершины v в массиве adjList.
-// Поскольку мы работаем без векторов, используем CSR-формат:
-//   cnt[v]      — число исходящих дуг из v,
-//   offset[v]   — смещение начала в adjList,
-//   adjList[k]  — k-й сосед.
+// Построение списков смежности (CSR-формат):
+//   offset[v] .. offset[v+1]-1  — диапазон соседей вершины v
+//                                 в массиве adjList[].
 // ---------------------------------------------------------------
 void buildAdjacency(int n, int m, const int* from, const int* to,
     int*& offset, int*& adjList)
@@ -124,7 +121,6 @@ void buildAdjacency(int n, int m, const int* from, const int* to,
     for (int i = 0; i < n; ++i) offset[i + 1] = offset[i] + cnt[i];
 
     adjList = new int[m > 0 ? m : 1];
-    // временные позиции заполнения
     int* pos = new int[n];
     for (int i = 0; i < n; ++i) pos[i] = offset[i];
     for (int i = 0; i < m; ++i) {
@@ -136,34 +132,30 @@ void buildAdjacency(int n, int m, const int* from, const int* to,
 }
 
 // ---------------------------------------------------------------
-// Итеративный поиск в глубину (DFS) на орграфе.
-// order — порядок выхода вершин из DFS (post-order).
-// Возвращает число компонент сильной связности.
-//
-// Используем два прохода алгоритма Косараю:
-//   1) DFS по исходному графу, запоминаем порядок выхода;
-//   2) DFS по обратному графу в порядке, обратном порядку выхода.
+// Компоненты сильной связности — алгоритм Косараю.
+// Два прохода:
+//   1) DFS по исходному графу, запоминаем порядок выхода (post-order);
+//   2) DFS по обратному графу в обратном порядке выхода.
 // ---------------------------------------------------------------
 int stronglyConnectedComponents(int n, int m,
     const int* from, const int* to,
     IntArray*& comps, int*& compSizes)
 {
-    // --- Построим прямой и обратный списки смежности ---
     int* offF, * adjF;
     buildAdjacency(n, m, from, to, offF, adjF);
 
     int* offR, * adjR;
     buildAdjacency(n, m, to, from, offR, adjR);
 
-    // --- Проход 1: итеративный DFS, порядок выхода ---
+    // --- Проход 1 ---
     bool* visited = new bool[n];
     for (int i = 0; i < n; ++i) visited[i] = false;
 
-    IntArray order;            // порядок выхода (post-order)
+    IntArray order;
     order.reserve(n);
 
-    IntArray stack;            // стек вершин
-    IntArray iter;             // стек текущих индексов в списке смежности
+    IntArray stack;
+    IntArray iter;
     stack.reserve(n);
     iter.reserve(n);
 
@@ -187,7 +179,6 @@ int stronglyConnectedComponents(int n, int m,
                 }
             }
             else {
-                // все соседи обработаны — вершина выходит из DFS
                 order.push(v);
                 stack.pop();
                 iter.pop();
@@ -197,11 +188,11 @@ int stronglyConnectedComponents(int n, int m,
 
     delete[] visited;
 
-    // --- Проход 2: DFS по обратному графу в обратном порядке ---
+    // --- Проход 2 ---
     bool* used = new bool[n];
     for (int i = 0; i < n; ++i) used[i] = false;
 
-    comps = new IntArray[n];   // компоненты
+    comps = new IntArray[n];
     compSizes = new int[n];
     int nComp = 0;
 
@@ -209,13 +200,11 @@ int stronglyConnectedComponents(int n, int m,
         int start = order[k];
         if (used[start]) continue;
 
-        // новая компонента
         IntArray& c = comps[nComp];
         c.reserve(4);
         c.push(start);
         used[start] = true;
 
-        // итеративный DFS по обратному графу
         IntArray st;
         st.reserve(4);
         st.push(start);
@@ -243,29 +232,29 @@ int stronglyConnectedComponents(int n, int m,
 }
 
 // ---------------------------------------------------------------
-// Поиск компонент двусвязности (блоков) неориентированного графа.
-// Используется алгоритм Тарьяна с итеративной реализацией DFS.
+// Компоненты двусвязности (блоки) неориентированного графа.
+// Алгоритм Тарьяна, итеративная реализация DFS.
 //
-// Идея:
-//   - DFS по неориентированному графу; для каждой вершины храним
-//     глубину tin[v] и минимальную достижимую глубину low[v].
-//   - Ребро (v, u) — мост, если low[u] > tin[v].
-//   - Вершина v — точка сочленения, если у неё есть ребёнок u,
-//     для которого low[u] >= tin[v] (и v — не корень DFS).
-//   - Компонента двусвязности (блок) — множество рёбер,
-//     накопленных в стеке между вызовами DFS.
+// Возвращает:
+//   comps         — массив списков ВЕРШИН каждого блока
+//                   (в порядке первого появления при разборе рёбер);
+//   compSizes     — число вершин в каждом блоке;
+//   compEdges     — массив списков РЁБЕР каждого блока, уложенных
+//                   подряд парами: u0, v0, u1, v1, ...
+//                   (ориентация — как во входном файле);
+//   compEdgeCount — число рёбер в каждом блоке
+//                   (= compEdges[i].size / 2).
 // ---------------------------------------------------------------
 int biconnectedComponents(int n, int m,
     const int* from, const int* to,
     IntArray*& comps, int*& compSizes,
-    bool*& isArticulation, bool*& isBridge)
+    IntArray*& compEdges, int*& compEdgeCount)
 {
-    // Построим неориентированный список смежности (CSR).
-    // Каждое ребро входит дважды (в обе стороны).
+    // Построим неориентированный CSR: каждое ребро входит дважды.
     int m2 = 2 * m;
     int* eFrom = new int[m2 > 0 ? m2 : 1];
     int* eTo = new int[m2 > 0 ? m2 : 1];
-    int* eId = new int[m2 > 0 ? m2 : 1];   // номер исходного ребра
+    int* eId = new int[m2 > 0 ? m2 : 1];
     for (int i = 0; i < m; ++i) {
         eFrom[2 * i] = from[i];
         eTo[2 * i] = to[i];
@@ -299,7 +288,6 @@ int biconnectedComponents(int n, int m,
     }
     delete[] eFrom; delete[] eTo; delete[] eId;
 
-    // Массивы алгоритма Тарьяна
     int* tin = new int[n];
     int* low = new int[n];
     int* parent = new int[n];
@@ -308,25 +296,22 @@ int biconnectedComponents(int n, int m,
         low[i] = -1;
         parent[i] = -1;
     }
-    isArticulation = new bool[n];
-    isBridge = new bool[m > 0 ? m : 1];
-    for (int i = 0; i < n; ++i) isArticulation[i] = false;
-    for (int i = 0; i < m; ++i) isBridge[i] = false;
 
-    // Стек рёбер (по id) — для накопления блока
+    // Стек рёбер (по id) — для накопления блоков.
     IntArray edgeStack;
     edgeStack.reserve(16);
 
     comps = new IntArray[n];
+    compEdges = new IntArray[n];
     compSizes = new int[n];
+    compEdgeCount = new int[n];
     int nComp = 0;
 
     int timer = 0;
 
-    // Итеративный DFS-обход
-    IntArray vertexStack;   // вершины
-    IntArray iterStack;     // текущие позиции в списке смежности
-    IntArray parentEdge;    // ребро, по которому пришли в вершину
+    IntArray vertexStack;
+    IntArray iterStack;
+    IntArray parentEdge;
     vertexStack.reserve(n);
     iterStack.reserve(n);
     parentEdge.reserve(n);
@@ -334,13 +319,10 @@ int biconnectedComponents(int n, int m,
     for (int start = 0; start < n; ++start) {
         if (tin[start] != -1) continue;
 
-        // Начинаем новый DFS из start (корень дерева DFS)
         tin[start] = low[start] = timer++;
         vertexStack.push(start);
         iterStack.push(off[start]);
         parentEdge.push(-1);
-
-        int rootChildren = 0;
 
         while (!vertexStack.empty()) {
             int v = vertexStack.top();
@@ -351,68 +333,78 @@ int biconnectedComponents(int n, int m,
                 int id = adjId[it];
                 it++;
 
-                // Пропускаем ребро, по которому пришли (в обратную сторону)
-                if (parent[v] == u && parentEdge[parentEdge.size - 1] == id)
-                    continue;
-                if (parent[v] == u && parentEdge[parentEdge.size - 1] == -1)
+                // Пропускаем конкретное ребро, по которому пришли
+                // в v (в обратную сторону). Проверка по id корректно
+                // обрабатывает и кратные рёбра.
+                if (parent[v] == u &&
+                    parentEdge[parentEdge.size - 1] == id)
                     continue;
 
                 if (tin[u] == -1) {
-                    // Ребро дерева
+                    // Ребро дерева.
                     parent[u] = v;
                     tin[u] = low[u] = timer++;
-                    if (v == start) rootChildren++;
+
+                    edgeStack.push(id);
 
                     vertexStack.push(u);
                     iterStack.push(off[u]);
                     parentEdge.push(id);
                 }
                 else {
-                    // Обратное ребро (u — предок или уже посещён)
+                    // Обратное ребро (u — предок или уже посещён).
                     if (tin[u] < low[v]) low[v] = tin[u];
-                    // Ребро попадает в стек рёбер блока
-                    // (только если u ещё «в стеке вершин» —
-                    //  для неориентированного графа это значит tin[u] < tin[v])
+                    // Кладём в стек только один раз — «снизу вверх»,
+                    // т.е. когда tin[u] < tin[v] (u — предок v).
                     if (tin[u] < tin[v])
                         edgeStack.push(id);
                 }
             }
             else {
-                // Все соседи обработаны — выходим из v
+                // Все соседи обработаны — выходим из v.
                 vertexStack.pop();
                 iterStack.pop();
                 int pe = parentEdge[parentEdge.size - 1];
                 parentEdge.pop();
 
                 if (parent[v] != -1) {
-                    // Обновляем low родителя
+                    // Обновляем low родителя.
                     if (low[v] < low[parent[v]])
                         low[parent[v]] = low[v];
 
-                    // Проверяем, является ли ребро (parent[v], v) мостом
-                    if (low[v] > tin[parent[v]])
-                        isBridge[pe] = true;
-
-                    // Проверяем, является ли parent[v] точкой сочленения
-                    if (low[v] >= tin[parent[v]] &&
-                        parent[parent[v]] != -1)
-                        isArticulation[parent[v]] = true;
-
-                    // Если v — корень DFS и у него >1 ребёнка
-                    if (parent[v] == start && rootChildren > 1)
-                        isArticulation[start] = true;
-
-                    // Если low[v] >= tin[parent[v]] — забираем блок
+                    // Забираем блок, если v — «корень» блока.
                     if (low[v] >= tin[parent[v]]) {
-                        IntArray& c = comps[nComp];
-                        c.reserve(4);
+                        IntArray& vs = comps[nComp];
+                        IntArray& es = compEdges[nComp];
+                        vs.reserve(4);
+                        es.reserve(8);
+
                         while (!edgeStack.empty()) {
                             int e = edgeStack.top();
                             edgeStack.pop();
-                            c.push(e);
+
+                            // Ребро в ориентации входного файла.
+                            int a = from[e];
+                            int b = to[e];
+
+                            // Добавляем вершины блока без дубликатов.
+                            bool haveA = false, haveB = false;
+                            for (int t = 0; t < vs.size; ++t) {
+                                if (vs[t] == a) haveA = true;
+                                if (vs[t] == b) haveB = true;
+                            }
+                            if (!haveA) vs.push(a);
+                            if (!haveB) vs.push(b);
+
+                            // Сохраняем ребро парой подряд.
+                            es.push(a);
+                            es.push(b);
+
                             if (e == pe) break;
                         }
-                        compSizes[nComp] = c.size;
+
+                        compSizes[nComp] = vs.size;
+                        compEdgeCount[nComp] = es.size / 2;
                         nComp++;
                     }
                 }
@@ -431,13 +423,13 @@ int biconnectedComponents(int n, int m,
 }
 
 // ---------------------------------------------------------------
-// Вывод результата в файл result.txt
+// Вывод результата в файл result.txt.
+// Для КДС печатаем и вершины блока, и его рёбра (парами u-v).
 // ---------------------------------------------------------------
 void writeResult(const char* filename,
     int nSCC, IntArray* scc, int* sccSizes,
     int nBCC, IntArray* bcc, int* bccSizes,
-    int m, bool* isBridge, int n,
-    bool* isArticulation)
+    IntArray* bccEdges, int* bccEdgeCount)
 {
     ofstream out(filename);
     if (!out) {
@@ -460,36 +452,21 @@ void writeResult(const char* filename,
     out << "biconnected components of an undirected graph: "
         << nBCC << " components\n";
     for (int i = 0; i < nBCC; ++i) {
-        for (int j = 0; j < bccSizes[i]; ++j) {
-            if (j) out << ' ';
-            out << bcc[i][j];
+        out << "component " << (i + 1) << ":\n";
+
+        out << "  vertices:";
+        for (int j = 0; j < bccSizes[i]; ++j)
+            out << ' ' << bcc[i][j];
+        out << '\n';
+
+        out << "  edges:";
+        for (int j = 0; j < bccEdgeCount[i]; ++j) {
+            int a = bccEdges[i][2 * j];
+            int b = bccEdges[i][2 * j + 1];
+            out << ' ' << a << '-' << b;
         }
         out << '\n';
     }
-
-    // Дополнительно: точки сочленения и мосты
-    out << '\n';
-    out << "articulation points:";
-    bool anyArt = false;
-    for (int i = 0; i < n; ++i) {
-        if (isArticulation[i]) {
-            out << ' ' << i;
-            anyArt = true;
-        }
-    }
-    if (!anyArt) out << " (none)";
-    out << '\n';
-
-    out << "bridges (by edge index):";
-    bool anyBr = false;
-    for (int i = 0; i < m; ++i) {
-        if (isBridge[i]) {
-            out << ' ' << i;
-            anyBr = true;
-        }
-    }
-    if (!anyBr) out << " (none)";
-    out << '\n';
 
     out.close();
 }
@@ -520,17 +497,15 @@ int main(int argc, char** argv)
     // --- Компоненты двусвязности ---
     IntArray* bcc = 0;
     int* bccSizes = 0;
-    bool* isArt = 0;
-    bool* isBri = 0;
+    IntArray* bccEdges = 0;
+    int* bccEdgeCount = 0;
     int nBCC = biconnectedComponents(n, m, from, to,
-        bcc, bccSizes,
-        isArt, isBri);
+        bcc, bccSizes, bccEdges, bccEdgeCount);
 
     // --- Запись результата ---
     writeResult("result.txt",
         nSCC, scc, sccSizes,
-        nBCC, bcc, bccSizes,
-        m, isBri, n, isArt);
+        nBCC, bcc, bccSizes, bccEdges, bccEdgeCount);
 
     // --- Освобождение памяти ---
     delete[] from;
@@ -543,8 +518,8 @@ int main(int argc, char** argv)
     if (bcc) {
         delete[] bcc;
         delete[] bccSizes;
-        delete[] isArt;
-        delete[] isBri;
+        delete[] bccEdges;
+        delete[] bccEdgeCount;
     }
 
     cout << "Done.\n";

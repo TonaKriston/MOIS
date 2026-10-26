@@ -1,11 +1,16 @@
 strongly connected components of a directed graph: 4 components
-0 2 1
-3 5 4
-6 8 7
-9 11 10
+4 6 5
+2
+0 3
+1
 
-biconnected components of an undirected graph: 1 components
-15 17 16 13 9 6 2
-
-articulation points: (none)
-bridges (by edge index): (none)
+biconnected components of an undirected graph: 3 components
+component 1:
+  vertices: 6 4 5
+  edges: 6-4 4-5 5-6 4-6
+component 2:
+  vertices: 4 3
+  edges: 4-3
+component 3:
+  vertices: 3 0 2 1
+  edges: 3-0 0-3 2-3 2-1 0-1
