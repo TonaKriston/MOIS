@@ -1,0 +1,112 @@
+Height of the first tree: 7
+Height of the second tree: 11
+
+First tree is not balanced, second tree is not balanced
+Trees are not isomorphic
+
+After transformation, trees are now isomorphic.
+
+Tree 1 (edge list):
+a b
+a c
+b d
+b e
+d h
+d i
+h p
+h q
+p E
+p F
+q G
+q H
+i r
+r I
+r J
+e j
+e k
+j s
+j t
+s K
+s L
+t M
+k u
+k v
+u N
+u O
+v P
+v Q
+Q V
+Q W
+c f
+c g
+f l
+f m
+l w
+l x
+w R
+w S
+x T
+T Z
+T 1
+m y
+m z
+y U
+g n
+g o
+n A
+n B
+o C
+o D
+
+Tree 2 (edge list):
+a b
+a n
+b c
+b l
+c d
+c D
+d e
+d k
+e f
+e h
+k q
+k C
+D r
+r E
+r F
+l s
+l g
+s G
+s I
+G H
+G t
+I J
+g i
+g K
+i m
+i u
+K L
+K v
+v M
+v N
+n w
+n W
+w O
+w S
+O P
+O R
+P x
+P Q
+R j
+j o
+j y
+S T
+S U
+T z
+W X
+W A
+X V
+X p
+A B
+A z
+
