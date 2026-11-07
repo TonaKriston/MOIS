@@ -1,0 +1,4 @@
+
+permutation order: 1
+permutation is even, number of transpositions: 0
+permutation is even, number of inversions: 0
